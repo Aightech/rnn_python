@@ -1,4 +1,16 @@
+import rospy
+from std_msgs.msg import Int16,Float32,Bool,Float32MultiArray,Int16MultiArray
+
 import numpy as np
+
+# Read from topics values
+lasers = list()
+speed_left = 0
+speed_right = 0
+
+# Rate for ROS in Hz
+rate = 10
+
 
 T = 30
 nb_sensor = 6
@@ -79,9 +91,94 @@ class RNNNumpy:
         N = np.sum((len(y_i) for y_i in y))
         return self.calculate_total_loss(x,y)/N
 
-   #RNNNumpy.forward_propagation = forward_propagatino
+class ExpertMixture:
+    def __init__(self, epsilon_g, nu_g, scaling):
+        self.epsilon_g = epsilon_g
+        self.nu_g = nu_g
+        self.scaling = scaling
 
-rnn = RNNNumpy(nb_sensor,nb_motor,4)
-print(rnn.forward_propagation(Xpredict))
-print(rnn.U)
+    #-------------------------------------------
+    # Target et output contienne les valeurs obtenues du robot/simulation et celles de sortie du RNN respectivement
+    # Rangées dans des dictionnaires (sous la forme dict[k-ieme RNN][j-ieme composante de l'etat])
+    def norm_2_i(target, output, index):
+        if(len(target) != len(output)):
+            print "Erreur norm_2_i: taille des tableaux target et output non identique"
+        norm = 0
+        for i in range(0, len(target)):
+            norm += (target[index][i] - output[index][i])**2
+        return norm
+    #-------------------------------------------
+    # We need a fonction to get s_t from each RNN
+    def compute_gt_i(s_t, index):
+        sum = 0
+        for i in range(0, len(s_t)):
+            sum += math.exp(s_t[i])
+        return (math.exp(s_t[index]) / sum)
 
+    #-------------------------------------------
+    def compute_post_proba(s_t, output, target, index):
+        sum = 0
+        for i in range(0, len(s_t)):
+            sum+= compute_gt_i(s_t, i) * math.exp((-1/(2*self.scaling))*norm_2_i(target, output, i))
+        return (compute_gt_i(s_t, index) * math.exp((-1/(2*self.scaling))*norm_2_i(target, output, index)) / sum)
+
+    #-------------------------------------------
+    def compute_partial_L_s_k(s_k, output, target, index):
+        return (compute_post_proba(s_k, output, target, index) - compute_gt_i(s_k, index))
+
+    #-------------------------------------------
+    def compute_delta_s_k_i(s_k, sk_1, output, target, index):
+        return (self.epsilon_g * compute_partial_L_s_k(s_k, output, target, index) - self.nu_g * (s_k[i] - s_k_1[i]))
+
+#-------------------------------------------
+def callback_lasers(data):
+    global lasers
+    lasers=list(data.data)
+    for i in range(0, len(lasers)):
+        if(lasers[i] == -1):
+            lasers[i] = l_range
+
+#-------------------------------------------
+def callback_speed_left(data):
+    global speed_left
+    speed_left = data
+
+#-------------------------------------------
+def callback_speed_right(data):
+    global speed_right
+    speed_right = data
+
+#-------------------------------------------
+def online_learning():
+    rospy.init_node('online_learning', anonymous=True)
+
+    # The node publishes the gating values so that rqt_plot can plot those :
+    d={}
+    for number in range (1, 6):
+        d["pub_gate_{0}".format(number)] = rospy.Publisher('/MRE/gate_'+str(number), Float32 , queue_size=10)
+
+    # The node receives sensory and motor information from simu_fastsim:
+    rospy.Subscriber("/simu_fastsim/lasers", Float32MultiArray, callback_lasers)
+    rospy.Subscriber('/simu_fastsim/speed_left', Float32, callback_speed_left)
+    rospy.Subscriber('/simu_fastsim/speed_right', Float32, callback_speed_right)
+
+    # Targetted operating frequency of the node:
+    r = rospy.Rate(rate) # 10hz
+    
+    # start time and timing related things
+    startT = rospy.get_time()
+    rospy.loginfo("Start time: " + str(startT))
+
+    while (not rospy.is_shutdown()):
+        # d["pub_gate_1"].publish(1)
+        pass
+
+    # rnn = RNNNumpy(nb_sensor,nb_motor,4)
+    # print(rnn.forward_propagation(Xpredict))
+    # print(rnn.U)
+
+#-------------------------------------------
+if __name__ == '__main__':
+    try:
+        online_learning()
+    except rospy.ROSInterruptException: pass
