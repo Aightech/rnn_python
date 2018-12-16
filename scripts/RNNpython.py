@@ -1,5 +1,7 @@
 import rospy
 from std_msgs.msg import Int16,Float32,Bool,Float32MultiArray,Int16MultiArray
+import rospkg 
+import csv
 
 import numpy as np
 
@@ -99,7 +101,7 @@ class ExpertMixture:
 
     #-------------------------------------------
     # Target et output contienne les valeurs obtenues du robot/simulation et celles de sortie du RNN respectivement
-    # Rangées dans des dictionnaires (sous la forme dict[k-ieme RNN][j-ieme composante de l'etat])
+    # Rangees dans des dictionnaires (sous la forme dict[k-ieme RNN][j-ieme composante de l'etat])
     def norm_2_i(target, output, index):
         if(len(target) != len(output)):
             print "Erreur norm_2_i: taille des tableaux target et output non identique"
@@ -147,7 +149,17 @@ def callback_speed_left(data):
 def callback_speed_right(data):
     global speed_right
     speed_right = data
-
+#-------------------------------------------
+def read_csv(path_to_file, dict_to_fill):
+    with open(path_to_file, 'rb') as csvfile:
+        next(csvfile)
+        r = csv.reader(csvfile, delimiter=',')
+        for row in r:
+            a = (((row[-1].replace("[", "")).replace(" ", "")).replace("]", "")).split(',')
+            b = [float(i) for i in a]
+            c = [100.0 if x == -1 else x for x in b]
+            dict_to_fill[float(row[0])] = c
+            
 #-------------------------------------------
 def online_learning():
     rospy.init_node('online_learning', anonymous=True)
@@ -164,8 +176,26 @@ def online_learning():
 
     # Targetted operating frequency of the node:
     r = rospy.Rate(rate) # 10hz
-    
-    # start time and timing related things
+
+    # Import the data
+    rospack = rospkg.RosPack()
+
+    # Get the file path for rospy_tutorials
+    path = rospack.get_path('RNN_python')
+
+    # Read left motor data from csv file
+    m_left = {}
+    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_left.csv', m_left)
+
+    # Read right motor data from csv file
+    m_right = {}
+    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_right.csv', m_right)
+
+    # Read lasers data from csv file
+    lasers = {}
+    read_csv(path + '/data/_slash_simu_fastsim_slash_lasers.csv', lasers)
+    print lasers
+    # Start time and timing related things
     startT = rospy.get_time()
     rospy.loginfo("Start time: " + str(startT))
 
