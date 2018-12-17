@@ -2,6 +2,7 @@ import rospy
 from std_msgs.msg import Int16,Float32,Bool,Float32MultiArray,Int16MultiArray
 import rospkg 
 import csv
+import collections
 
 import numpy as np
 
@@ -39,25 +40,41 @@ class RNN:
         self.nb_motor = nb_motor
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
+        # Window variables
         self.max_window_size = max_window_size
+        self.window = collections.deque(maxlen = max_window_size)
         # Randomly initialize the network parameters
         self.U = np.random.uniform(-np.sqrt(1./(nb_sensor+nb_motor)), np.sqrt(1./(nb_sensor + nb_motor)), (hidden_dim, nb_sensor + nb_motor))
         self.V = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (nb_sensor + nb_motor, hidden_dim))
         self.W = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (hidden_dim, hidden_dim))
         self.S = np.zeros( hidden_dim, max_window_size + 1)
 
+
+    #-------------------------------------------
     def set_gate_state(self,s):
         self.gate_state = s
 
+    #-------------------------------------------
     def get_gate_state(self):
         return self.gate_state
 
+    #-------------------------------------------
     def set_gate_opening(self,g):
         self.gate_opening = g
 
+    #-------------------------------------------
     def get_gate_opening(self):
         return self.gate_opening
-    
+
+    #-------------------------------------------
+    def append_value_window(self, x):
+        self.window.append(x)
+
+    #-------------------------------------------
+    def get_window_value(self):
+        return self.window
+
+    #-------------------------------------------
     def forward_propagation(self, x):
         # The total number of time steps
         T = len(x)
@@ -70,34 +87,74 @@ class RNN:
         for t in np.arange(T):
             self.S[:,t] = np.tanh(self.U.dot(x[:,t]) + self.W.dot(self.S[:,t-1]))
             o[t] = self.V.dot(self.S[:,t])
-        return [o, self.S]
+        return o
 
+    #-------------------------------------------
     def predict(self, x):
         # Perform forward propagation and return index of the highest score
-        o, s = self.forward_propagation(x)
+        o = self.forward_propagation(x)
         return o[-1]
 
+    #-------------------------------------------
     def calculate_total_loss(self, x, y):
         L = 0
         # For each sentence...
         for i in np.arange(len(y)):
-            o, s = self.forward_propagation(x[i])
+            o = self.forward_propagation(x[i])
             # We only care about our prediction of the "correct" words
             correct_word_predictions = o[np.arange(len(y[i])), y[i]]
             # Add to the loss based on how off we were
             L += -1 * np.sum(np.log(correct_word_predictions))
         return L
 
+    #-------------------------------------------
     def calculate_loss(self, x, y):
         # Divide the total loss by the number of training examples
         N = np.sum((len(y_i) for y_i in y))
         return self.calculate_total_loss(x,y)/N
 
+    #-------------------------------------------
     def compute_partial_E_V(target, output, time):
         return -2 * self.gate_opening * (np.subtract(target[t], output)).dot(self.S[t]) # Attention, a verifier au niveau de la multiplication
 
-    def compute_partial_E_U(target, output):
-        pass
+    #-------------------------------------------
+    def compute_activation_i(x, i, time):
+        a = 0
+        for j in range(0, nb_motor + nb_sensor):
+                a += self.U[i][j] * x[j]
+        for j in range(0, hidden_dim):
+                a += self.W[i][j] * self.S[time - 1][j]
+        return a
+
+    #-------------------------------------------
+    def compute_partial_s_j_t_U(target, output, x, i, A, B, time):
+        # Compute values required to compute the partial derivative
+        a = compute_activation(x, i, time)
+        if(i == A):
+            x_b = x[B]
+        else:
+            x_b = 0
+        # Compute the partial derivative
+        if(time == 0):
+            return (1 - np.tanh(a)**2) * x_b
+        else:
+            return (1 - np.tanh(a)**2) * (x_b + compute_partial_s_j_t_U(target, output, x, i, A, B, time - 1))
+        
+    #-------------------------------------------
+    def compute_partial_E_U_A_B(target, output, x, A, B, time):
+        sum = 0
+        for i in range(0, nb_motor + nb_sensor):
+            for j in range(0,hidden_dim):
+                sum += 2 * self.gate_opening * (target[time][i] - output[i]) * self.V[i][j] * compute_partial_s_j_t_U(target, output, x, j, A, B, time)
+        return sum
+    #-------------------------------------------
+    def compute_partial_E_U(target, output, x, time):
+        dE_dU = np.zeros( hidden_dim, nb_sensor + nb_motor)
+        for A in range(0, hidden_dim):
+            for B in range(0, nb_sensor + nb_motor):
+                for t in range(0, len(self.window)):
+                    dE_dU[A][B] += compute_partial_E_U_A_B(target, output, x, A, B, t)
+        return dE_dU
 
 class ExpertMixture:
     def __init__(self, epsilon_g, nu_g, scaling):
@@ -172,7 +229,7 @@ def read_csv(path_to_file, dict_to_fill, list_flag):
             else:                                           # If we want a dict of float as an output
                 c = float(a[0])                             # Convert the first element of the list from str to float
             # dict_to_fill[float(row[0])] = c                 # Return a dict with the rostime as a key
-            dict_to_fill[k] = [float(row[0]), c]                 # Return a dict with the rostime as a key
+            dict_to_fill[k] = [float(row[0]), c]                 # Return a dict with the time step as key and [rostime, data] as value
             k += 1
    
 #-------------------------------------------
@@ -221,8 +278,8 @@ def online_learning():
     read_csv(path + '/data/_slash_simu_fastsim_slash_lasers.csv', lasers, list_flag=True)
 
     # Align the data
-    data = align_data(m_left, m_right, lasers)
-    print data
+    training_data = align_data(m_left, m_right, lasers)
+
     # Start time and timing related things
     startT = rospy.get_time()
     rospy.loginfo("Start time: " + str(startT))
