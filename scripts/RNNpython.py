@@ -28,9 +28,9 @@ Xpredict[0,0] = 1
 Xreal = np.zeros((nb_sensor+nb_motor,T))
 Xreal[0,0] = 1 
 
-class RNNNumpy:
+class RNN:
     
-    def __init__(self,num, nb_sensor, nb_motor, hidden_dim=4, bptt_truncate=4):
+    def __init__(self,num, nb_sensor, nb_motor, max_window_size, hidden_dim=4, bptt_truncate=4):
         # Assign instance variables
         self.num = num
         self.gate_state = 0
@@ -39,13 +39,15 @@ class RNNNumpy:
         self.nb_motor = nb_motor
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
+        self.max_window_size = max_window_size
         # Randomly initialize the network parameters
         self.U = np.random.uniform(-np.sqrt(1./(nb_sensor+nb_motor)), np.sqrt(1./(nb_sensor + nb_motor)), (hidden_dim, nb_sensor + nb_motor))
         self.V = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (nb_sensor + nb_motor, hidden_dim))
         self.W = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (hidden_dim, hidden_dim))
+        self.S = np.zeros( hidden_dim, max_window_size + 1)
 
     def set_gate_state(self,s):
-        self.gate_state = ds
+        self.gate_state = s
 
     def get_gate_state(self):
         return self.gate_state
@@ -61,16 +63,14 @@ class RNNNumpy:
         T = len(x)
         # During forward propagation we save all hidden states in s because need them later.
         # We add one additional element for the initial hidden, which we set to 0
-        s = np.zeros((T + 1, self.hidden_dim))
-        s[-1] = np.zeros(self.hidden_dim)
+        self.S[-1] = np.zeros(self.hidden_dim)
         # The outputs at each time step. Again, we save them for later.
         o = np.zeros((T, self.nb_sensor + self.nb_motor))
         # For each time step...
         for t in np.arange(T):
-            # Note that we are indxing U by x[t]. This is the same as multiplying U with a one-hot vector.
-            s[t] = np.tanh(self.U.dot(x[:,t]) + self.W.dot(s[t-1]))
-            o[t] = self.V.dot(s[t])
-        return [o, s]
+            self.S[:,t] = np.tanh(self.U.dot(x[:,t]) + self.W.dot(self.S[:,t-1]))
+            o[t] = self.V.dot(self.S[:,t])
+        return [o, self.S]
 
     def predict(self, x):
         # Perform forward propagation and return index of the highest score
@@ -92,6 +92,12 @@ class RNNNumpy:
         # Divide the total loss by the number of training examples
         N = np.sum((len(y_i) for y_i in y))
         return self.calculate_total_loss(x,y)/N
+
+    def compute_partial_E_V(target, output, time):
+        return -2 * self.gate_opening * (np.subtract(target[t], output)).dot(self.S[t]) # Attention, a verifier au niveau de la multiplication
+
+    def compute_partial_E_U(target, output):
+        pass
 
 class ExpertMixture:
     def __init__(self, epsilon_g, nu_g, scaling):
@@ -149,17 +155,36 @@ def callback_speed_left(data):
 def callback_speed_right(data):
     global speed_right
     speed_right = data
+
 #-------------------------------------------
-def read_csv(path_to_file, dict_to_fill):
+def read_csv(path_to_file, dict_to_fill, list_flag):
     with open(path_to_file, 'rb') as csvfile:
         next(csvfile)
         r = csv.reader(csvfile, delimiter=',')
+        k = 0
         for row in r:
+            # Remove all the unwanted characters and delimit the data with ','
             a = (((row[-1].replace("[", "")).replace(" ", "")).replace("]", "")).split(',')
-            b = [float(i) for i in a]
-            c = [100.0 if x == -1 else x for x in b]
-            dict_to_fill[float(row[0])] = c
-            
+            if(list_flag):                                  # If we want a dict of list as an output 
+                b = [float(i) for i in a]                   # Transform each element of the list from str to float
+                c = [100.0 if x == -1 else x for x in b]    # Change all the unknown lasers value from -1 to lasers range
+                c = c[1:7]                                  # Only use the 6 side and front captors
+            else:                                           # If we want a dict of float as an output
+                c = float(a[0])                             # Convert the first element of the list from str to float
+            # dict_to_fill[float(row[0])] = c                 # Return a dict with the rostime as a key
+            dict_to_fill[k] = [float(row[0]), c]                 # Return a dict with the rostime as a key
+            k += 1
+   
+#-------------------------------------------
+def align_data(m_left, m_right, lasers):
+    k = 0
+    data = []
+    for i in range(0, len(lasers)):
+        if(m_left[k][0] < lasers[i][0] and k != len(m_left) - 1):
+            k += 1
+        data.append([m_left[k][1], m_right[k][1]] + [a for a in lasers[i][1]])
+    return data
+
 #-------------------------------------------
 def online_learning():
     rospy.init_node('online_learning', anonymous=True)
@@ -185,16 +210,19 @@ def online_learning():
 
     # Read left motor data from csv file
     m_left = {}
-    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_left.csv', m_left)
+    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_left.csv', m_left, list_flag=False)
 
     # Read right motor data from csv file
     m_right = {}
-    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_right.csv', m_right)
+    read_csv(path + '/data/_slash_simu_fastsim_slash_speed_right.csv', m_right, list_flag=False)
 
     # Read lasers data from csv file
     lasers = {}
-    read_csv(path + '/data/_slash_simu_fastsim_slash_lasers.csv', lasers)
-    print lasers
+    read_csv(path + '/data/_slash_simu_fastsim_slash_lasers.csv', lasers, list_flag=True)
+
+    # Align the data
+    data = align_data(m_left, m_right, lasers)
+    print data
     # Start time and timing related things
     startT = rospy.get_time()
     rospy.loginfo("Start time: " + str(startT))
@@ -203,7 +231,7 @@ def online_learning():
         # d["pub_gate_1"].publish(1)
         pass
 
-    # rnn = RNNNumpy(nb_sensor,nb_motor,4)
+    # rnn = RNN(nb_sensor,nb_motor,4)
     # print(rnn.forward_propagation(Xpredict))
     # print(rnn.U)
 
