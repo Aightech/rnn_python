@@ -282,7 +282,7 @@ class ExpertMixture:
 	    	for i in range(0, self.RNN_number):
 	    		self.g_t[i] = self.compute_gt_i(i)
 	    		# Publish the gating values
-	    		d_gate["pub_gate_{0}".format(number)].publish(self.g_t[i])
+	    		d_gate["pub_gate_{0}".format(i)].publish(self.g_t[i])
 
 	    	for i in range(0, self.RNN_number):
 	    		tmp[i] += self.compute_delta_s_k_i(i)
