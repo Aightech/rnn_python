@@ -3,8 +3,12 @@
         pkg="RNN_python"
         type="RNNpython.py"
         output="screen" />
-  	<node name="harry_plotter"
+  	<node name="harry_plotter_error"
         pkg="rqt_plot"
         type="rqt_plot"
         args="/MRE/error_1 /MRE/error_2 /MRE/error_3 /MRE/error_4 /MRE/error_5" />
+    <node name="harry_plotter_gate"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        args="/MRE/gate_1 /MRE/gate_2 /MRE/gate_3 /MRE/gate_4 /MRE/gate_5" />
 </launch>

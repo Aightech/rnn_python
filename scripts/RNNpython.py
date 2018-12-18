@@ -64,8 +64,8 @@ class RNN_module:
     #-------------------------------------------
     # Updates attributes of RNN class
     def update_attributes(self, gate_opening, gate_state):
-    	set_gate_opening(gate_opening)
-    	set_gate_state(gate_state)
+    	self.set_gate_opening(gate_opening)
+    	self.set_gate_state(gate_state)
 
     #-------------------------------------------
     def set_gate_state(self, s):
@@ -260,9 +260,12 @@ class ExpertMixture:
 
     #-------------------------------------------
     def routine(self):
-    	d={}
+    	d_error={}
+    	d_gate={}
     	for number in range (1, self.RNN_number + 1):
-        	d["error_{0}".format(number)] = rospy.Publisher('/MRE/error_'+str(number), Float32 , queue_size=10)
+        	d_error["error_{0}".format(number)] = rospy.Publisher('/MRE/error_'+str(number), Float32 , queue_size=10)
+        for number in range (1, self.RNN_number + 1):
+        	d_gate["pub_gate_{0}".format(number)] = rospy.Publisher('/MRE/gate_'+str(number), Float32 , queue_size=10)
 
     	tmp = [0 for i in range(0,self.RNN_number)]
     	self.s_t.append(tmp)
@@ -270,18 +273,21 @@ class ExpertMixture:
 	    	for i in range(0, self.RNN_number):
 	    		o = self.RNNs["RNN_{0}".format(i)].predict(self.data[t])
     			self.error[i] = np.subtract(np.array(self.data[t]),o)
-    			d["error_{0}".format(i + 1)].publish(self.norm_2_i(i))
-
+    			# Publish the error values
+    			d_error["error_{0}".format(i + 1)].publish(self.norm_2_i(i))
 	    		tmp[i] = self.RNNs["RNN_{0}".format(i)].get_gate_state()
 
 	    	self.s_t.append(tmp)
 
 	    	for i in range(0, self.RNN_number):
 	    		self.g_t[i] = self.compute_gt_i(i)
+	    		# Publish the gating values
+	    		d_gate["pub_gate_{0}".format(number)].publish(self.g_t[i])
 
 	    	for i in range(0, self.RNN_number):
 	    		tmp[i] += self.compute_delta_s_k_i(i)
-	    		self.RNNs["RNN_{0}".format(i)].set_gate_state(self.s_t[1][i])
+	    		# self.RNNs["RNN_{0}".format(i)].set_gate_state(self.s_t[1][i])
+	    		self.RNNs["RNN_{0}".format(i)].update_attributes(self.g_t[i], self.s_t[1][i])
 	    		self.s_t[0][i] = self.s_t[1][i]
 	    	self.s_t.append(tmp)
 
