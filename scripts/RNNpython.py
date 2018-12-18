@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import rospy
 from std_msgs.msg import Int16,Float32,Bool,Float32MultiArray,Int16MultiArray
 import rospkg 
@@ -282,7 +284,6 @@ class ExpertMixture:
 	    		self.RNNs["RNN_{0}".format(i)].set_gate_state(self.s_t[1][i])
 	    		self.s_t[0][i] = self.s_t[1][i]
 	    	self.s_t.append(tmp)
-	    	print t
 
     	
 
