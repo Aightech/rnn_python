@@ -1,3 +1,19 @@
+<a href="https://www.codecogs.com/eqnedit.php?latex=X\in&space;\mathbb{R}^{n}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?X\in&space;\mathbb{R}^{n}" title="X\in \mathbb{R}^{n}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=Y\in&space;\mathbb{R}^{n}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?Y\in&space;\mathbb{R}^{n}" title="Y\in \mathbb{R}^{n}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=S\in&space;\mathbb{R}^{d}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?S\in&space;\mathbb{R}^{d}" title="S\in \mathbb{R}^{d}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=Z\in&space;\mathbb{R}^{n}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?Z\in&space;\mathbb{R}^{n}" title="Z\in \mathbb{R}^{n}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=U\in&space;\mathbb{R}^{d&space;x&space;n}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?U\in&space;\mathbb{R}^{d&space;x&space;n}" title="U\in \mathbb{R}^{d x n}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=V\in&space;\mathbb{R}^{n&space;x&space;d}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?V\in&space;\mathbb{R}^{n&space;x&space;d}" title="V\in \mathbb{R}^{n x d}" /></a>
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=W\in&space;\mathbb{R}^{d&space;x&space;d}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?W\in&space;\mathbb{R}^{d&space;x&space;d}" title="W\in \mathbb{R}^{d x d}" /></a>
+
+
+
 <a href="https://www.codecogs.com/eqnedit.php?latex=Z^t=U.X^t&space;&plus;&space;W.S^{t-1}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?Z^t=U.X^t&space;&plus;&space;W.S^{t-1}" title="Z^t=U.X^t + W.S^{t-1}" /></a>
 
 <a href="https://www.codecogs.com/eqnedit.php?latex=S^t=f(Z^t)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?S^t=f(Z^t)" title="S^t=f(Z^t)" /></a>
