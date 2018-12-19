@@ -22,3 +22,16 @@
 ---
 #### V
 <a href="https://www.codecogs.com/eqnedit.php?latex=\frac{\partial&space;E^T}{\partial&space;V}&space;=&space;\left&space;(&space;\sum_{t=1}^{T}&space;\frac{\partial&space;E^t}{\partial&space;v_{ij}}\right)_{ij}&space;=&space;\left(&space;\sum_{t=1}^{T}\frac{\partial&space;E^t}{\partial&space;y_i}&space;.&space;\frac{\partial&space;y_i}{\partial&space;v_{ij}}&space;\right)_{ij}" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\frac{\partial&space;E^T}{\partial&space;V}&space;=&space;\left&space;(&space;\sum_{t=1}^{T}&space;\frac{\partial&space;E^t}{\partial&space;v_{ij}}\right)_{ij}&space;=&space;\left(&space;\sum_{t=1}^{T}\frac{\partial&space;E^t}{\partial&space;y_i}&space;.&space;\frac{\partial&space;y_i}{\partial&space;v_{ij}}&space;\right)_{ij}" title="\frac{\partial E^T}{\partial V} = \left ( \sum_{t=1}^{T} \frac{\partial E^t}{\partial v_{ij}}\right)_{ij} = \left( \sum_{t=1}^{T}\frac{\partial E^t}{\partial y_i} . \frac{\partial y_i}{\partial v_{ij}} \right)_{ij}" /></a>
+
+
+## Results
+**Several Experts**
+![alt text](img/gating_1.png "Gates: Shared")
+**Only one expert**
+![alt text](img/gating_2.png "Gates: Super Expert")
+
+### Several layers
+**Low level getes**
+![alt text](img/gating_low_1.png "Gates low level")
+**High level gates**
+![alt text](img/gating_high_1.png "Gates high level")
