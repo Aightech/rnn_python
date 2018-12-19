@@ -1,6 +1,6 @@
 <launch>
 	<node name="rnn"
-        pkg="RNN_python"
+        pkg="rnn_python"
         type="RNNpython.py"
         output="screen" />
 
