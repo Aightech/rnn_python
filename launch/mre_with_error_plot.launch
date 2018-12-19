@@ -3,12 +3,15 @@
         pkg="RNN_python"
         type="RNNpython.py"
         output="screen" />
-    <node name="harry_plotter_gate"
+
+    <node name="harry_plotter_gate_high"
         pkg="rqt_plot"
         type="rqt_plot"
-        args="/MRE/gate_1 /MRE/gate_2 /MRE/gate_3 /MRE/gate_4 /MRE/gate_5" />
-  	<node name="harry_plotter_error"
+        args="/MRE/gate_high_1 /MRE/gate_high_2 /MRE/gate_high_3 /MRE/gate_high_4 /MRE/gate_high_5" />
+
+    <node name="harry_plotter_gate_low"
         pkg="rqt_plot"
         type="rqt_plot"
-        args="/MRE/error_1 /MRE/error_2 /MRE/error_3 /MRE/error_4 /MRE/error_5" />
+        args="/MRE/gate_low_1 /MRE/gate_low_2 /MRE/gate_low_3 /MRE/gate_low_4 /MRE/gate_low_5" />
+
 </launch>

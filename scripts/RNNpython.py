@@ -20,24 +20,24 @@ l_range = 100
 
 class RNN_module:
 
-    def __init__(self, num, nb_sensor, nb_motor, scaling, learning_rate=0.9, hidden_dim=4, bptt_truncate=20):
+    def __init__(self, num, nb_inputs, scaling, learning_rate=0.002, momentum=0.9, hidden_dim=4, bptt_truncate=20):
         # Assign instance variables
         self.num = num
         self.gate_state = 0
         self.gate_opening = 0
-        self.nb_sensor = nb_sensor
-        self.nb_motor = nb_motor
+        self.nb_inputs = nb_inputs
         self.hidden_dim = hidden_dim
         self.bptt_truncate = bptt_truncate
         self.learning_rate = learning_rate
         # Window variables
         self.window = collections.deque(maxlen = bptt_truncate + 1)
         # Randomly initialize the network parameters
-        self.U = np.random.uniform(-np.sqrt(1./(nb_sensor+nb_motor))*scaling, np.sqrt(1./(nb_sensor + nb_motor))*scaling, (hidden_dim, nb_sensor + nb_motor))
-        self.V = np.random.uniform(-np.sqrt(1./hidden_dim)*scaling, np.sqrt(1./hidden_dim)*scaling, (nb_sensor + nb_motor, hidden_dim))
+        self.U = np.random.uniform(-np.sqrt(1./nb_inputs)*scaling, np.sqrt(1./nb_inputs)*scaling, (hidden_dim, nb_inputs))
+        self.V = np.random.uniform(-np.sqrt(1./hidden_dim)*scaling, np.sqrt(1./hidden_dim)*scaling, (nb_inputs, hidden_dim))
         self.W = np.random.uniform(-np.sqrt(1./hidden_dim)*scaling, np.sqrt(1./hidden_dim)*scaling, (hidden_dim, hidden_dim))
         self.S = np.zeros( (hidden_dim, bptt_truncate + 1) )
-        self.O = np.zeros( (nb_motor+nb_sensor, bptt_truncate + 1))
+        self.O = np.zeros( (nb_inputs, bptt_truncate + 1))
+        # self.vel = np.zeros( ())
 
     #-------------------------------------------
     # x: input of the RNN (sensori-motor state at time t)
@@ -82,7 +82,7 @@ class RNN_module:
         if(len(self.O[0]) > 0):
             return self.O[:,-1]
         else:
-            return np.zeros(self.nb_motor+self.nb_sensor)
+            return np.zeros(self.nb_inputs)
 
     #-------------------------------------------
     def forward_propagation(self):
@@ -92,7 +92,7 @@ class RNN_module:
         # We add one additional element for the initial hidden, which we set to 0
         self.S[:,-1] = np.zeros(self.hidden_dim)
         # The outputs at each time step. Again, we save them for later.
-        output = np.zeros((self.nb_sensor + self.nb_motor, T))
+        output = np.zeros((self.nb_inputs, T))
         # For each time step...
         for t in range(0, T):
             self.S[:,t] = np.tanh(self.U.dot(self.window[t][:]) + self.W.dot(self.S[:,t-1]))
@@ -109,22 +109,23 @@ class RNN_module:
     def compute_partial_E_V(self):
         sum = 0
         for t in range(0, len(self.window) - 1):
-            sum += -2 * self.gate_opening * (np.subtract(self.window[t+1][:], self.O[t])).outer(self.S[:,t])
+            sum += -2 * self.gate_opening * np.outer(np.subtract(self.window[t+1][:], self.O[:,t]), self.S[:,t])
         return sum
 
     #-------------------------------------------
     def compute_activation(self, j, time):
         a = 0
-        for i in range(0, nb_motor + nb_sensor):
+        for i in range(0, self.nb_inputs):
                 a += self.U[j][i] * self.window[time][i]
-        for i in range(0, hidden_dim):
+        for i in range(0, self.hidden_dim):
+                # print self.S
                 a += self.W[j][i] * self.S[time - 1][i]
         return a
 
     #-------------------------------------------
     def compute_partial_s_j_t_U(self, j, A, B, time):
         # Compute values required to compute the partial derivative
-        a = compute_activation(j, time)
+        a = self.compute_activation(j, time)
         if(j == A):
             x_b = self.window[time][B]
         else:
@@ -134,31 +135,31 @@ class RNN_module:
             return (1 - np.tanh(a)**2) * x_b
         else:
             d_s_sum = 0
-            for k in range(0, hidden_dim):
-                d_s_sum += self.W[j][k] * compute_partial_s_j_t_U(k, A, B, time - 1)
+            for k in range(0, self.hidden_dim):
+                d_s_sum += self.W[j][k] * self.compute_partial_s_j_t_U(k, A, B, time - 1)
             return (1 - np.tanh(a)**2) * (x_b + d_s_sum)
         
     #-------------------------------------------
     def compute_partial_E_U_A_B(self, A, B, time):
         sum = 0
-        for i in range(0, nb_motor + nb_sensor):
-            for j in range(0,hidden_dim):
-                sum += -2 * self.gate_opening * (self.window[time + 1][i] - self.O[time][i]) * self.V[i][j] * compute_partial_s_j_t_U(j, A, B, time)
+        for i in range(0, self.nb_inputs):
+            for j in range(0, self.hidden_dim):
+                sum += -2 * self.gate_opening * (self.window[time + 1][i] - self.O[i][time]) * self.V[i][j] * self.compute_partial_s_j_t_U(j, A, B, time)
         return sum
 
     #-------------------------------------------
     def compute_partial_E_U(self):
-        dE_dU = np.zeros( hidden_dim, nb_sensor + nb_motor)
-        for A in range(0, hidden_dim):
-            for B in range(0, nb_sensor + nb_motor):
+        dE_dU = np.zeros( (self.hidden_dim, self.nb_inputs) )
+        for A in range(0, self.hidden_dim):
+            for B in range(0, self.nb_inputs):
                 for t in range(0, len(self.window) - 1):
-                    dE_dU[A][B] += compute_partial_E_U_A_B(A, B, t)
+                    dE_dU[A][B] += self.compute_partial_E_U_A_B(A, B, t)
         return dE_dU
 
     #-------------------------------------------
     def compute_partial_s_j_t_W(self, j, A, B, time):
         # Compute values required to compute the partial derivative
-        a = compute_activation(j, time)
+        a = self.compute_activation(j, time)
         if(j == A):
             s_b = self.S[B, time]
         else:
@@ -168,36 +169,36 @@ class RNN_module:
             return (1 - np.tanh(a)**2) * s_b
         else:
             d_s_sum = 0
-            for k in range(0, hidden_dim):
-                d_s_sum += self.W[j][k] * compute_partial_s_j_t_W(k, A, B, time - 1)
+            for k in range(0, self.hidden_dim):
+                d_s_sum += self.W[j][k] * self.compute_partial_s_j_t_W(k, A, B, time - 1)
             return (1 - np.tanh(a)**2) * (s_b + d_s_sum)
         
     #-------------------------------------------
     def compute_partial_E_W_A_B(self, A, B, time):
         sum = 0
-        for i in range(0, nb_motor + nb_sensor):
-            for j in range(0,hidden_dim):
-                sum += -2 * self.gate_opening * (self.window[time + 1][i] - self.O[time][i]) * self.V[i][j] * compute_partial_s_j_t_W(j, A, B, time)
+        for i in range(0, self.nb_inputs):
+            for j in range(0, self.hidden_dim):
+                sum += -2 * self.gate_opening * (self.window[time + 1][i] - self.O[i][time]) * self.V[i][j] * self.compute_partial_s_j_t_W(j, A, B, time)
         return sum
 
     #-------------------------------------------
     def compute_partial_E_W(self):
-        dE_dW = np.zeros( hidden_dim, nb_sensor + nb_motor)
-        for A in range(0, hidden_dim):
-            for B in range(0, nb_sensor + nb_motor):
+        dE_dW = np.zeros( (self.hidden_dim, self.hidden_dim) )
+        for A in range(0, self.hidden_dim):
+            for B in range(0, self.hidden_dim):
                 for t in range(0, len(self.window) - 1):
-                    dE_dW[A][B] += compute_partial_E_W_A_B(A, B, t)
+                    dE_dW[A][B] += self.compute_partial_E_W_A_B(A, B, t)
         return dE_dW
 
     #-------------------------------------------
     def update_weights(self):
-        self.W = np.add(self.W, self.learning_rate * compute_partial_E_W())
-        self.V = np.add(self.V, self.learning_rate * compute_partial_E_V())
-        self.U = np.add(self.U, self.learning_rate * compute_partial_E_U())
+        self.W = np.add(self.W, self.learning_rate * self.compute_partial_E_W())
+        self.V = np.add(self.V, self.learning_rate * self.compute_partial_E_V())
+        self.U = np.add(self.U, self.learning_rate * self.compute_partial_E_U())
 
 #-------------------------------------------
 class ExpertMixture:
-    def __init__(self, epsilon_g, nu_g, scaling, RNN_number=5):
+    def __init__(self, nb_inputs, epsilon_g, nu_g, scaling, high, RNN_number=5):
         self.epsilon_g = epsilon_g
         self.nu_g = nu_g
         self.scaling = scaling
@@ -208,14 +209,19 @@ class ExpertMixture:
         # Create a list of RNN_number RNN_modules
         self.RNNs = list()
         for i in range(0, RNN_number):
-            self.RNNs.append(RNN_module(num=i, nb_sensor=6, nb_motor=2, scaling=scaling))
+            self.RNNs.append(RNN_module(num=i, nb_inputs=nb_inputs, scaling=scaling))
 
         self.pub_error = list()
         self.pub_gate = list()
+        if(high):
+            tmp = "high_"
+        else:
+            tmp = "low_"
+
         for number in range (1, self.RNN_number + 1):
-            self.pub_error.append(rospy.Publisher('/MRE/error_'+str(number), Float32 , queue_size=10))
+            self.pub_error.append(rospy.Publisher('/MRE/error_' + tmp + str(number), Float32 , queue_size=10))
         for number in range (1, self.RNN_number + 1):
-            self.pub_gate.append(rospy.Publisher('/MRE/gate_'+str(number), Float32 , queue_size=10))
+            self.pub_gate.append(rospy.Publisher('/MRE/gate_' + tmp + str(number), Float32 , queue_size=10))
 
     #-------------------------------------------
     # Target et output contiennent les valeurs obtenues du robot/simulation et celles de sortie du RNN respectivement
@@ -225,6 +231,22 @@ class ExpertMixture:
         for i in range(0, len(self.error)):
             norm += (self.error[index][i])**2
         return norm
+    #-------------------------------------------
+    def get_s_t(self):
+        return self.s_t
+
+    #-------------------------------------------
+    def set_s_t(self, s):
+        self.s_t = s
+
+    #-------------------------------------------
+    def get_g_t(self):
+        return self.g_t
+
+    #-------------------------------------------
+    def set_g_t(self, g):
+        self.g_t = g
+
     #-------------------------------------------
     def compute_gt_i(self, index):
         sum = 0
@@ -285,6 +307,7 @@ class ExpertMixture:
             for i in range(0, self.RNN_number):
                 self.s_t[1][i] = self.s_t[1][i] + self.compute_delta_s_k_i(i)
                 self.RNNs[i].update_gate(self.g_t[i], self.s_t[1][i])
+                self.RNNs[i].update_weights()
 
     #-------------------------------------------
     def routine_online(self, data):
@@ -310,6 +333,7 @@ class ExpertMixture:
         for i in range(0, self.RNN_number):
             self.s_t[1][i] = self.s_t[1][i] + self.compute_delta_s_k_i(i)
             self.RNNs[i].update_gate(self.g_t[i], self.s_t[1][i])
+            self.RNNs[i].update_weights()
 
 #-------------------------------------------
 def callback_lasers(data):
@@ -418,16 +442,32 @@ def online_learning():
 
     ##########      Learn
 
-    mre = ExpertMixture(0.007, 0.02, 0.1)
-    # mre.routine_offline(training_data)
+    mre_low_off = ExpertMixture(8, 0.007, 0.02, 0.1, high=False)
+    mre_high_off = ExpertMixture(5, 0.007, 0.02, 0.1, high=True)
+
+    delta = 10
+    t = 0
+    for d in training_data:
+        mre_low_off.routine_online(d)
+        if(t % delta == 0):
+            g = mre_low_off.get_g_t()
+            mre_high_off.routine_online(g)
+
+        t += 1
+
+        # mre_low_off.routine_offline(training_data)
+    # mre_low_on = ExpertMixture(8, 0.007, 0.02, 0.1)
+    # mre_high_on = ExpertMixture(5, 0.007, 0.02, 0.1)
+
+    
         
 
     while (not rospy.is_shutdown()):
         data = []
         data += [speed_left.data]
         data += [speed_right.data]
-        data += lasers[1:len(lasers)-1]
-        print data
+        tmp = [(a-50)/50 for a in lasers[1:(len(lasers)-1)]]
+        data += tmp
         if(len(data) == 8):
             mre.routine_online(data)
             pass
