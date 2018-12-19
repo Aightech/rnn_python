@@ -20,7 +20,7 @@ l_range = 100
 
 class RNN_module:
 
-    def __init__(self, num, nb_inputs, scaling, learning_rate=0.002, momentum=0.9, hidden_dim=4, bptt_truncate=20):
+    def __init__(self, num, nb_inputs, scaling, learning_rate=0.002, momentum=0.9, hidden_dim=4, bptt_truncate=4):
         # Assign instance variables
         self.num = num
         self.gate_state = 0
@@ -452,7 +452,6 @@ def online_learning():
         if(t % delta == 0):
             g = mre_low_off.get_g_t()
             mre_high_off.routine_online(g)
-
         t += 1
 
         # mre_low_off.routine_offline(training_data)
