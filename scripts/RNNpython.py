@@ -16,24 +16,10 @@ speed_right = 0
 
 # Rate for ROS in Hz
 rate = 1000
-
-
-T = 30
-nb_sensor = 6
-nb_motor = 2
-nb_rnn = 4
-
-U = np.zeros((nb_rnn, nb_sensor+nb_motor)) 
-V = np.zeros((nb_sensor+nb_motor, nb_rnn))
-W = np.zeros((nb_rnn, nb_rnn))
-
-Xpredict = np.zeros((nb_sensor+nb_motor,T))
-Xpredict[0,0] = 1 
-Xreal = np.zeros((nb_sensor+nb_motor,T))
-Xreal[0,0] = 1 
+l_range = 100
 
 class RNN_module:
-    
+
     def __init__(self, num, nb_sensor, nb_motor, scaling, learning_rate=0.9, hidden_dim=4, bptt_truncate=4):
         # Assign instance variables
         self.num = num
@@ -47,9 +33,9 @@ class RNN_module:
         # Window variables
         self.window = collections.deque(maxlen = bptt_truncate + 1)
         # Randomly initialize the network parameters
-        self.U = np.random.uniform(-np.sqrt(1./(nb_sensor+nb_motor)), np.sqrt(1./(nb_sensor + nb_motor)), (hidden_dim, nb_sensor + nb_motor))
-        self.V = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (nb_sensor + nb_motor, hidden_dim))
-        self.W = np.random.uniform(-np.sqrt(1./hidden_dim), np.sqrt(1./hidden_dim), (hidden_dim, hidden_dim))
+        self.U = np.random.uniform(-np.sqrt(1./(nb_sensor+nb_motor))*scaling, np.sqrt(1./(nb_sensor + nb_motor))*scaling, (hidden_dim, nb_sensor + nb_motor))
+        self.V = np.random.uniform(-np.sqrt(1./hidden_dim)*scaling, np.sqrt(1./hidden_dim)*scaling, (nb_sensor + nb_motor, hidden_dim))
+        self.W = np.random.uniform(-np.sqrt(1./hidden_dim)*scaling, np.sqrt(1./hidden_dim)*scaling, (hidden_dim, hidden_dim))
         self.S = np.zeros( (hidden_dim, bptt_truncate + 1) )
         self.O = np.zeros( (nb_motor+nb_sensor, bptt_truncate + 1))
 
@@ -57,15 +43,15 @@ class RNN_module:
     # x: input of the RNN (sensori-motor state at time t)
     # time: current time step
     def predict(self, x):
-    	self.append_value_window(x)
-    	self.O = self.forward_propagation()
-    	return self.get_output()
+        self.append_value_window(x)
+        self.O = self.forward_propagation()
+        return self.get_output()
 
     #-------------------------------------------
     # Updates attributes of RNN class
     def update_attributes(self, gate_opening, gate_state):
-    	self.set_gate_opening(gate_opening)
-    	self.set_gate_state(gate_state)
+        self.set_gate_opening(gate_opening)
+        self.set_gate_state(gate_state)
 
     #-------------------------------------------
     def set_gate_state(self, s):
@@ -93,10 +79,10 @@ class RNN_module:
 
     #-------------------------------------------
     def get_output(self):
-    	if(len(self.O[0]) > 0):
-        	return self.O[:,-1]
+        if(len(self.O[0]) > 0):
+            return self.O[:,-1]
         else:
-        	return np.zeros(self.nb_motor+self.nb_sensor)
+            return np.zeros(self.nb_motor+self.nb_sensor)
 
     #-------------------------------------------
     def forward_propagation(self):
@@ -111,13 +97,13 @@ class RNN_module:
         for t in range(0, T):
             self.S[:,t] = np.tanh(self.U.dot(self.window[t][:]) + self.W.dot(self.S[:,t-1]))
             output[:,t] = self.V.dot(self.S[:,t])
-        return output	# Return output on the current time window
+        return output   # Return output on the current time window
 
     #-------------------------------------------
     def compute_partial_E_V(self):
-    	sum = 0
-    	for t in range(0, len(self.window) - 1):
-    		sum += -2 * self.gate_opening * (np.subtract(self.window[t+1][:], self.O[t])).outer(self.S[:,t])
+        sum = 0
+        for t in range(0, len(self.window) - 1):
+            sum += -2 * self.gate_opening * (np.subtract(self.window[t+1][:], self.O[t])).outer(self.S[:,t])
         return sum
 
     #-------------------------------------------
@@ -141,10 +127,10 @@ class RNN_module:
         if(time == 0):
             return (1 - np.tanh(a)**2) * x_b
         else:
-        	d_s_sum = 0
-        	for k in range(0, hidden_dim):
-        		d_s_sum += self.W[j][k] * compute_partial_s_j_t_U(k, A, B, time - 1)
-			return (1 - np.tanh(a)**2) * (x_b + d_s_sum)
+            d_s_sum = 0
+            for k in range(0, hidden_dim):
+                d_s_sum += self.W[j][k] * compute_partial_s_j_t_U(k, A, B, time - 1)
+            return (1 - np.tanh(a)**2) * (x_b + d_s_sum)
         
     #-------------------------------------------
     def compute_partial_E_U_A_B(self, A, B, time):
@@ -175,10 +161,10 @@ class RNN_module:
         if(time == 0):
             return (1 - np.tanh(a)**2) * s_b
         else:
-        	d_s_sum = 0
-        	for k in range(0, hidden_dim):
-        		d_s_sum += self.W[j][k] * compute_partial_s_j_t_W(k, A, B, time - 1)
-			return (1 - np.tanh(a)**2) * (s_b + d_s_sum)
+            d_s_sum = 0
+            for k in range(0, hidden_dim):
+                d_s_sum += self.W[j][k] * compute_partial_s_j_t_W(k, A, B, time - 1)
+            return (1 - np.tanh(a)**2) * (s_b + d_s_sum)
         
     #-------------------------------------------
     def compute_partial_E_W_A_B(self, A, B, time):
@@ -199,18 +185,9 @@ class RNN_module:
 
     #-------------------------------------------
     def update_weights(self):
-   		self.W = np.add(self.W, self.learning_rate * compute_partial_E_W())
-   		self.V = np.add(self.V, self.learning_rate * compute_partial_E_V())
-   		self.U = np.add(self.U, self.learning_rate * compute_partial_E_U())
-
-
-
-
-
-
-
-
-
+        self.W = np.add(self.W, self.learning_rate * compute_partial_E_W())
+        self.V = np.add(self.V, self.learning_rate * compute_partial_E_V())
+        self.U = np.add(self.U, self.learning_rate * compute_partial_E_U())
 
 #-------------------------------------------
 class ExpertMixture:
@@ -223,10 +200,10 @@ class ExpertMixture:
         self.s_t = collections.deque(maxlen=2)
         self.g_t = np.zeros(RNN_number)
         self.RNN_number = RNN_number
-        # Create a dictionnary of RNN_number RNN_modules
-        self.RNNs = {}
+        # Create a list of RNN_number RNN_modules
+        self.RNNs = list()
         for i in range(0, RNN_number):
-        	self.RNNs["RNN_{0}".format(i)] = RNN_module(num=i, nb_sensor=6, nb_motor=2, scaling=scaling)
+            self.RNNs.append(RNN_module(num=i, nb_sensor=6, nb_motor=2, scaling=scaling))
 
     #-------------------------------------------
     # Target et output contiennent les valeurs obtenues du robot/simulation et celles de sortie du RNN respectivement
@@ -241,14 +218,18 @@ class ExpertMixture:
         sum = 0
         for i in range(0, len(self.s_t[1])):
             sum += math.exp(self.s_t[1][i])
+        if sum == 0:
+            sum = 0.01
         return (math.exp(self.s_t[1][index]) / sum)
 
     #-------------------------------------------
     def compute_post_proba(self, index):
         sum = 0
-        for i in range(0, len(self.s_t[1])):
-            sum += self.g_t[i] * math.exp((-1/(2*self.scaling))*self.norm_2_i(i))
-        return (self.g_t[index] * math.exp((-1/(2*self.scaling))*self.norm_2_i(index)) / sum)
+        for i in range(0, self.RNN_number):
+            sum += self.g_t[i] * math.exp((-1/(2*self.scaling**2))*self.norm_2_i(i))
+        if sum == 0:
+            sum = 0.01
+        return self.g_t[index] * math.exp((-1/(2*self.scaling**2))*self.norm_2_i(index)) / sum
 
     #-------------------------------------------
     def compute_partial_L_s_k(self, index):
@@ -260,42 +241,36 @@ class ExpertMixture:
 
     #-------------------------------------------
     def routine(self):
-    	d_error={}
-    	d_gate={}
-    	for number in range (1, self.RNN_number + 1):
-        	d_error["error_{0}".format(number)] = rospy.Publisher('/MRE/error_'+str(number), Float32 , queue_size=10)
+        pub_error = list()
+        pub_gate = list()
         for number in range (1, self.RNN_number + 1):
-        	d_gate["pub_gate_{0}".format(number)] = rospy.Publisher('/MRE/gate_'+str(number), Float32 , queue_size=10)
+            pub_error.append(rospy.Publisher('/MRE/error_'+str(number), Float32 , queue_size=10))
+        for number in range (1, self.RNN_number + 1):
+            pub_gate.append(rospy.Publisher('/MRE/gate_'+str(number), Float32 , queue_size=10))
 
-    	tmp = [0 for i in range(0,self.RNN_number)]
-    	self.s_t.append(tmp)
-    	for t in range(0, len(self.data) - 1):
-	    	for i in range(0, self.RNN_number):
-	    		o = self.RNNs["RNN_{0}".format(i)].predict(self.data[t])
-    			self.error[i] = np.subtract(np.array(self.data[t]),o)
-    			# Publish the error values
-    			d_error["error_{0}".format(i + 1)].publish(self.norm_2_i(i))
-	    		tmp[i] = self.RNNs["RNN_{0}".format(i)].get_gate_state()
+        tmp = [0 for i in range(0,self.RNN_number)]
+        self.s_t.append(tmp)
+        for t in range(0, len(self.data) - 1):
+            for i in range(0, self.RNN_number):
+                o = self.RNNs[i].predict(self.data[t])
+                self.error[i] = np.subtract(np.array(self.data[t]),o)
+                # Publish the error values
+                pub_error[i].publish(self.norm_2_i(i))
+                tmp[i] = self.RNNs[i].get_gate_state()
 
-	    	self.s_t.append(tmp)
+            self.s_t.append(tmp)
 
-	    	for i in range(0, self.RNN_number):
-	    		self.g_t[i] = self.compute_gt_i(i)
-	    		# Publish the gating values
-	    		d_gate["pub_gate_{0}".format(i)].publish(self.g_t[i])
+            for i in range(0, self.RNN_number):
+                self.g_t[i] = self.compute_gt_i(i)
+                # Publish the gating values
+                pub_gate[i].publish(self.g_t[i])
 
-	    	for i in range(0, self.RNN_number):
-	    		tmp[i] += self.compute_delta_s_k_i(i)
-	    		# self.RNNs["RNN_{0}".format(i)].set_gate_state(self.s_t[1][i])
-	    		self.RNNs["RNN_{0}".format(i)].update_attributes(self.g_t[i], self.s_t[1][i])
-	    		self.s_t[0][i] = self.s_t[1][i]
-	    	self.s_t.append(tmp)
-
-    	
-
-
-
-
+            for i in range(0, self.RNN_number):
+                tmp[i] += self.compute_delta_s_k_i(i)
+                self.RNNs[i].set_gate_state(self.s_t[1][i])
+                self.RNNs[i].update_attributes(self.g_t[i], self.s_t[1][i])
+                self.s_t[0][i] = self.s_t[1][i]
+            self.s_t.append(tmp)
 
 #-------------------------------------------
 def callback_lasers(data):
@@ -347,14 +322,17 @@ def align_data(m_left, m_right, lasers):
         data.append([m_left[k][1], m_right[k][1]] + [(a-50)/50 for a in lasers[i][1]])
     return data
 
-
 #-------------------------------------------
 def data_to_window(data, time, window_size):
-	if(time < window_size - 1 and time > 0):
-		return data[0:(time + 2)]			# Return everything we can according to current time
-	elif(time > 0):
-		return data[(time - window_size +2):time + 2] 	# Return a window vector of [t-2, t-1, t, t+1] according to current time
-	print "Error in data_to_window: check time input"
+    if(time < window_size - 1 and time > 0):
+        return data[0:(time + 2)]           # Return everything we can according to current time
+    elif(time > 0):
+        return data[(time - window_size +2):time + 2]   # Return a window vector of [t-2, t-1, t, t+1] according to current time
+    print "Error in data_to_window: check time input"
+    
+#-------------------------------------------
+def extend_data(data):
+    return data + data + data
 
 #-------------------------------------------
 def online_learning():
@@ -398,15 +376,13 @@ def online_learning():
     startT = rospy.get_time()
     rospy.loginfo("Start time: " + str(startT))
 
-    mre = ExpertMixture(training_data, 0.007, 0.02, 100)
+    mre = ExpertMixture(training_data, 0.007, 0.02, 10)
     mre.routine()
-	    
+        
 
     while (not rospy.is_shutdown()):
         # d["pub_gate_1"].publish(1)
         pass
-
-    
 
 #-------------------------------------------
 if __name__ == '__main__':
