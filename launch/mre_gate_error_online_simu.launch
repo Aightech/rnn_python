@@ -1,0 +1,29 @@
+<launch>
+	<node name="rnn_python"
+        pkg="rnn_python"
+        type="expert_mixture.py"
+        output="screen" />
+
+    <node name="harry_plotter_gate_high"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        args="/MRE/gate_high_1 /MRE/gate_high_2 /MRE/gate_high_3 /MRE/gate_high_4 /MRE/gate_high_5" />
+
+    <node name="harry_plotter_gate_low"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        args="/MRE/gate_low_1 /MRE/gate_low_2 /MRE/gate_low_3 /MRE/gate_low_4 /MRE/gate_low_5" />
+
+    <node name="harry_plotter_error_low"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        args="/MRE/error_low_1 /MRE/error_low_2 /MRE/error_low_3 /MRE/error_low_4 /MRE/error_low_5" />
+
+    <node name="harry_plotter_error_high"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        args="/MRE/error_high_1 /MRE/error_high_2 /MRE/error_high_3 /MRE/error_high_4 /MRE/error_high_5" />
+
+    <include file="$(find wall_follower)/launch/map.launch" />
+    
+</launch>

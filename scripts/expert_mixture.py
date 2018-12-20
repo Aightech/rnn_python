@@ -10,6 +10,7 @@ from rnn_python import RNN_module
 import scripts
 import math
 import numpy as np
+import sys
 
 # Read from topics values
 lasers = list()
@@ -228,6 +229,13 @@ def extend_data(data, n):
 def online_learning():
     rospy.init_node('online_learning', anonymous=True)
 
+    # Process input args
+    offline = False
+
+    for arg in sys.argv:
+        if arg == "--offline":
+            offline = True
+
     # The node receives sensory and motor information from simu_fastsim:
     rospy.Subscriber("/simu_fastsim/lasers", Float32MultiArray, callback_lasers)
     rospy.Subscriber('/simu_fastsim/speed_left', Float32, callback_speed_left)
@@ -267,8 +275,6 @@ def online_learning():
 
     ##########      Learn
 
-    offline = True;
-
     mre_low_off = ExpertMixture(8, 0.007, 0.02, 0.1, high=False)
     mre_high_off = ExpertMixture(5, 0.007, 0.02, 0.1, high=True)
 
@@ -285,8 +291,8 @@ def online_learning():
             t += 1
 
         # mre_low_off.routine_offline(training_data)
-    mre_low_on = ExpertMixture(8, 0.007, 0.02, 1, high=False)
-    mre_high_on = ExpertMixture(5, 0.007, 0.02, 1, high=True)
+    mre_low_on = ExpertMixture(8, 0.007, 0.02, 10, high=False)
+    mre_high_on = ExpertMixture(5, 0.007, 0.02, 10, high=True)
 
     while (not rospy.is_shutdown() and not offline):
         data = []
