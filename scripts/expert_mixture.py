@@ -91,7 +91,7 @@ class ExpertMixture:
 
     #-------------------------------------------
     def compute_partial_L_s_k(self, index):
-        return (self.compute_post_proba(index) - self.g_t[index])
+        return (self.compute_post_proba(index) - self.g_t[index])#(1 - self.g_t[index]) )
 
     #-------------------------------------------
     def compute_delta_s_k_i(self, index):
@@ -151,6 +151,7 @@ class ExpertMixture:
 
         for i in range(0, self.RNN_number):
             self.g_t[i] = self.compute_gt_i(i)
+
             # Publish the gating values
             self.pub_gate[i].publish(self.g_t[i])
 
@@ -240,7 +241,7 @@ def online_learning():
     rospack = rospkg.RosPack()
 
     # Get the file path for rospy_tutorials
-    path = rospack.get_path('expert_mixture')
+    path = rospack.get_path('rnn_python')
 
     # Read left motor data from csv file
     m_left_data = {}
@@ -266,23 +267,28 @@ def online_learning():
 
     ##########      Learn
 
-    # mre_low_off = ExpertMixture(8, 0.007, 0.02, 0.1, high=False)
-    # mre_high_off = ExpertMixture(5, 0.007, 0.02, 0.1, high=True)
+    offline = True;
 
-    delta = 10
+    mre_low_off = ExpertMixture(8, 0.007, 0.02, 0.1, high=False)
+    mre_high_off = ExpertMixture(5, 0.007, 0.02, 0.1, high=True)
+
+    delta = 100
     t = 0
-    # for d in training_data:
-    #     mre_low_off.routine_online(d)
-    #     if(t % delta == 0):
-    #         g = mre_low_off.get_g_t()
-    #         mre_high_off.routine_online(g)
-    #     t += 1
+
+    if(offline):
+        for d in training_data:
+            mre_low_off.routine_online(d)
+
+            if(t % delta == 0):
+                g = mre_low_off.get_g_t()
+                mre_high_off.routine_online(g)
+            t += 1
 
         # mre_low_off.routine_offline(training_data)
-    mre_low_on = ExpertMixture(8, 0.007, 0.02, 0.1, high=False)
-    mre_high_on = ExpertMixture(5, 0.007, 0.02, 0.1, high=True)
+    mre_low_on = ExpertMixture(8, 0.007, 0.02, 1, high=False)
+    mre_high_on = ExpertMixture(5, 0.007, 0.02, 1, high=True)
 
-    while (not rospy.is_shutdown()):
+    while (not rospy.is_shutdown() and not offline):
         data = []
         data += [speed_left.data]
         data += [speed_right.data]
@@ -291,7 +297,8 @@ def online_learning():
         if(len(data) == 8):
             mre_low_on.routine_online(data)
             if(t%delta == 0):
-            	g = mre_high_on
+                g = mre_low_on.get_g_t()
+                mre_high_on.routine_online(g)
             t += 1
 
 #-------------------------------------------
